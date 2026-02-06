@@ -1,0 +1,36 @@
+{
+  "name": "bmad-opencode-converter",
+  "version": "1.0.0",
+  "description": "Convert BMAD modules to OpenCode plugins (agents, skills, tools)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "bmad-convert": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "tsx src/cli.ts --source tests/sources/_bmad --output tests/output",
+    "clean": "rm -rf dist tests/output/*"
+  },
+  "dependencies": {
+    "yaml": "^2.3.4",
+    "csv-parse": "^5.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "bmad",
+    "opencode",
+    "converter",
+    "ai-agents"
+  ],
+  "license": "MIT"
+}
