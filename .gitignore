@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 
 # Test output (generated)
 tests/output/
+tests/output*/

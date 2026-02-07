@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
 import { convert } from './converter.js';
+import type { ConversionTarget } from './converter.js';
 
-function parseArgs(args: string[]): { source: string; output: string; verbose: boolean } {
+const VALID_TARGETS: ConversionTarget[] = ['opencode', 'claude', 'agents'];
+
+function parseArgs(args: string[]): {
+  source: string;
+  output: string;
+  target: ConversionTarget;
+  verbose: boolean;
+} {
   let source = '';
   let output = '';
+  let target: ConversionTarget = 'opencode';
   let verbose = false;
   
   for (let i = 0; i < args.length; i++) {
@@ -13,6 +22,13 @@ function parseArgs(args: string[]): { source: string; output: string; verbose: b
       source = args[++i] || '';
     } else if (arg === '--output' || arg === '-o') {
       output = args[++i] || '';
+    } else if (arg === '--target' || arg === '-t') {
+      const val = args[++i] || '';
+      if (!VALID_TARGETS.includes(val as ConversionTarget)) {
+        console.error(`Error: Invalid target '${val}'. Must be one of: ${VALID_TARGETS.join(', ')}`);
+        process.exit(1);
+      }
+      target = val as ConversionTarget;
     } else if (arg === '--verbose' || arg === '-v') {
       verbose = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -21,30 +37,37 @@ function parseArgs(args: string[]): { source: string; output: string; verbose: b
     }
   }
   
-  return { source, output, verbose };
+  return { source, output, target, verbose };
 }
 
 function printHelp(): void {
   console.log(`
-BMAD to OpenCode Converter
+BMAD Module Converter
 
 Usage: bmad-convert --source <dir> --output <dir> [options]
 
 Options:
-  -s, --source <dir>   Path to BMAD _bmad directory
-  -o, --output <dir>   Output directory for OpenCode files
-  -v, --verbose        Enable verbose output
-  -h, --help           Show this help message
+  -s, --source <dir>     Path to BMAD _bmad directory
+  -o, --output <dir>     Output directory
+  -t, --target <format>  Target format: opencode (default), claude, agents
+  -v, --verbose          Enable verbose output
+  -h, --help             Show this help message
+
+Targets:
+  opencode   Output to .opencode/ (OpenCode agents + skills)
+  claude     Output to .claude/ (Claude Code agents + skills)
+  agents     Output to .agents/ (Cross-IDE agents + skills)
 
 Examples:
   bmad-convert --source ./_bmad --output ./
-  bmad-convert -s tests/sources/_bmad -o tests/output -v
+  bmad-convert -s ./_bmad -o ./ -t claude
+  bmad-convert -s tests/sources/_bmad -o tests/output -t agents -v
 `);
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const { source, output, verbose } = parseArgs(args);
+  const { source, output, target, verbose } = parseArgs(args);
   
   if (!source || !output) {
     console.error('Error: Both --source and --output are required');
@@ -56,6 +79,7 @@ async function main(): Promise<void> {
     const result = await convert({
       sourceDir: source,
       outputDir: output,
+      target,
       verbose,
     });
     
@@ -68,7 +92,8 @@ async function main(): Promise<void> {
     }
     
     if (!verbose) {
-      console.log(`Converted ${result.agents.length} agents and ${result.skills.length} skills to ${output}`);
+      const formatLabel = target === 'opencode' ? '.opencode/' : target === 'claude' ? '.claude/' : '.agents/';
+      console.log(`Converted ${result.agentCount} agents and ${result.skillCount} skills to ${formatLabel} in ${output}`);
     }
   } catch (err) {
     console.error('Conversion failed:', err);

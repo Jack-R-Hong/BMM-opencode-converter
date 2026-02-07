@@ -1,7 +1,7 @@
 {
   "name": "bmad-opencode-converter",
   "version": "1.0.0",
-  "description": "Convert BMAD modules to OpenCode plugins (agents, skills, tools)",
+  "description": "Convert BMAD modules to OpenCode, Claude Code, or cross-IDE agent formats",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,10 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "test": "tsx src/cli.ts --source tests/sources/_bmad --output tests/output",
-    "clean": "rm -rf dist tests/output/*"
+    "test:claude": "tsx src/cli.ts --source tests/sources/_bmad --output tests/output-claude --target claude",
+    "test:agents": "tsx src/cli.ts --source tests/sources/_bmad --output tests/output-agents --target agents",
+    "test:all": "npm run test && npm run test:claude && npm run test:agents",
+    "clean": "rm -rf dist tests/output tests/output-claude tests/output-agents"
   },
   "dependencies": {
     "yaml": "^2.3.4",

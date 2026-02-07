@@ -8,17 +8,28 @@ import type {
   BmadWorkflowManifestEntry,
   BmadTaskManifestEntry,
 } from './types/index.js';
-import type { OpenCodeConversionResult, OpenCodeAgent, OpenCodeSkill } from './types/index.js';
+import type { OpenCodeConversionResult } from './types/index.js';
+import type { ClaudeCodeConversionResult } from './types/claude.js';
 import { parseAgentManifest, parseWorkflowManifest, parseTaskManifest } from './parsers/index.js';
 import { parseAgent } from './parsers/agent-parser.js';
 import { parseWorkflow } from './parsers/workflow-parser.js';
 import { convertAgents } from './converters/agent-converter.js';
 import { convertWorkflows } from './converters/workflow-converter.js';
 import { convertTasks } from './converters/task-converter.js';
+import { convertClaudeAgents } from './converters/claude/claude-agent-converter.js';
+import { convertClaudeWorkflows } from './converters/claude/claude-workflow-converter.js';
+import { convertClaudeTasks } from './converters/claude/claude-task-converter.js';
+import { buildOwnershipMap } from './converters/ownership.js';
+import { writeOpenCodeAgent, writeOpenCodeSkill } from './writers/opencode-writer.js';
+import { writeClaudeAgent, writeClaudeSkill } from './writers/claude-writer.js';
+import { writeAgentsAgent, writeAgentsSkill } from './writers/agents-writer.js';
+
+export type ConversionTarget = 'opencode' | 'claude' | 'agents';
 
 export interface ConversionOptions {
   sourceDir: string;
   outputDir: string;
+  target?: ConversionTarget;
   verbose?: boolean;
 }
 
@@ -145,49 +156,13 @@ function loadTasks(
   return tasks;
 }
 
-function writeAgent(outputDir: string, agent: OpenCodeAgent): void {
-  const agentDir = path.join(outputDir, '.opencode', 'agents');
-  fs.mkdirSync(agentDir, { recursive: true });
-  
-  const frontmatterLines = ['---'];
-  frontmatterLines.push(`description: ${JSON.stringify(agent.frontmatter.description)}`);
-  if (agent.frontmatter.mode) frontmatterLines.push(`mode: ${agent.frontmatter.mode}`);
-  if (agent.frontmatter.tools) {
-    frontmatterLines.push('tools:');
-    for (const [tool, enabled] of Object.entries(agent.frontmatter.tools)) {
-      if (enabled !== undefined) frontmatterLines.push(`  ${tool}: ${enabled}`);
-    }
-  }
-  frontmatterLines.push('---');
-  
-  const content = frontmatterLines.join('\n') + '\n\n' + agent.prompt;
-  fs.writeFileSync(path.join(agentDir, agent.filename), content);
-}
-
-function writeSkill(outputDir: string, skill: OpenCodeSkill): void {
-  const skillDir = path.join(outputDir, '.opencode', 'skills', skill.folder);
-  fs.mkdirSync(skillDir, { recursive: true });
-  
-  const frontmatterLines = ['---'];
-  frontmatterLines.push(`name: ${skill.frontmatter.name}`);
-  frontmatterLines.push(`description: ${JSON.stringify(skill.frontmatter.description)}`);
-  if (skill.frontmatter.license) frontmatterLines.push(`license: ${skill.frontmatter.license}`);
-  if (skill.frontmatter.compatibility) frontmatterLines.push(`compatibility: ${skill.frontmatter.compatibility}`);
-  if (skill.frontmatter.metadata) {
-    frontmatterLines.push('metadata:');
-    for (const [key, value] of Object.entries(skill.frontmatter.metadata)) {
-      frontmatterLines.push(`  ${key}: ${JSON.stringify(value)}`);
-    }
-  }
-  frontmatterLines.push('---');
-  
-  const content = frontmatterLines.join('\n') + '\n\n' + skill.content;
-  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content);
-}
-
-export async function convert(options: ConversionOptions): Promise<OpenCodeConversionResult> {
-  const { sourceDir, outputDir, verbose = false } = options;
-  
+function convertAndWriteOpenCode(
+  bmadAgents: BmadAgent[],
+  bmadWorkflows: BmadWorkflow[],
+  bmadTasks: BmadTask[],
+  outputDir: string,
+  verbose: boolean,
+): OpenCodeConversionResult {
   const result: OpenCodeConversionResult = {
     agents: [],
     skills: [],
@@ -196,72 +171,181 @@ export async function convert(options: ConversionOptions): Promise<OpenCodeConve
     warnings: [],
     errors: [],
   };
-  
-  if (verbose) console.log('BMAD to OpenCode Converter');
-  if (verbose) console.log('========================\n');
-  
-  const configDir = path.join(sourceDir, '_config');
-  
-  const agentManifestContent = readFileIfExists(path.join(configDir, 'agent-manifest.csv'));
-  const workflowManifestContent = readFileIfExists(path.join(configDir, 'workflow-manifest.csv'));
-  const taskManifestContent = readFileIfExists(path.join(configDir, 'task-manifest.csv'));
-  
-  if (!agentManifestContent && !workflowManifestContent && !taskManifestContent) {
-    result.errors.push(`No manifest files found in ${configDir}`);
-    return result;
-  }
-  
-  if (verbose) console.log('Loading BMAD assets...\n');
-  
-  const agentManifest = agentManifestContent ? parseAgentManifest(agentManifestContent) : [];
-  const workflowManifest = workflowManifestContent ? parseWorkflowManifest(workflowManifestContent) : [];
-  const taskManifest = taskManifestContent ? parseTaskManifest(taskManifestContent) : [];
-  
-  if (verbose) console.log(`Found ${agentManifest.length} agents, ${workflowManifest.length} workflows, ${taskManifest.length} tasks\n`);
-  
-  if (verbose) console.log('Loading agents...');
-  const bmadAgents = loadAgents(sourceDir, agentManifest, verbose);
-  
-  if (verbose) console.log('\nLoading workflows...');
-  const bmadWorkflows = loadWorkflows(sourceDir, workflowManifest, verbose);
-  
-  if (verbose) console.log('\nLoading tasks...');
-  const bmadTasks = loadTasks(sourceDir, taskManifest, verbose);
-  
-  if (verbose) console.log('\nConverting to OpenCode format...\n');
-  
+
   const convertedAgents = convertAgents(bmadAgents);
   result.agents = convertedAgents.agents;
   result.skills.push(...convertedAgents.skills);
-  
-  const convertedWorkflows = convertWorkflows(bmadWorkflows);
-  result.skills.push(...convertedWorkflows);
-  
-  const convertedTasks = convertTasks(bmadTasks);
-  result.skills.push(...convertedTasks);
-  
-  if (verbose) console.log('Writing output files...\n');
-  
+  result.skills.push(...convertWorkflows(bmadWorkflows));
+  result.skills.push(...convertTasks(bmadTasks));
+
   fs.mkdirSync(outputDir, { recursive: true });
-  
+
   for (const agent of result.agents) {
-    writeAgent(outputDir, agent);
+    writeOpenCodeAgent(outputDir, agent);
     if (verbose) console.log(`  Created agent: ${agent.filename}`);
   }
-  
   for (const skill of result.skills) {
-    writeSkill(outputDir, skill);
+    writeOpenCodeSkill(outputDir, skill);
     if (verbose) console.log(`  Created skill: ${skill.folder}/SKILL.md`);
   }
-  
+
+  return result;
+}
+
+function convertAndWriteClaude(
+  bmadAgents: BmadAgent[],
+  bmadWorkflows: BmadWorkflow[],
+  bmadTasks: BmadTask[],
+  outputDir: string,
+  verbose: boolean,
+): ClaudeCodeConversionResult {
+  const result: ClaudeCodeConversionResult = {
+    agents: [],
+    skills: [],
+    warnings: [],
+    errors: [],
+  };
+
+  const ownershipMap = buildOwnershipMap(bmadAgents, bmadWorkflows, bmadTasks);
+
+  const convertedAgents = convertClaudeAgents(bmadAgents, ownershipMap);
+  result.agents = convertedAgents.agents;
+  result.skills.push(...convertedAgents.skills);
+  result.skills.push(...convertClaudeWorkflows(bmadWorkflows));
+  result.skills.push(...convertClaudeTasks(bmadTasks));
+
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  for (const agent of result.agents) {
+    writeClaudeAgent(outputDir, agent);
+    if (verbose) console.log(`  Created agent: ${agent.filename}`);
+  }
+  for (const skill of result.skills) {
+    writeClaudeSkill(outputDir, skill);
+    if (verbose) console.log(`  Created skill: ${skill.folder}/SKILL.md`);
+  }
+
+  return result;
+}
+
+function convertAndWriteAgents(
+  bmadAgents: BmadAgent[],
+  bmadWorkflows: BmadWorkflow[],
+  bmadTasks: BmadTask[],
+  outputDir: string,
+  verbose: boolean,
+): OpenCodeConversionResult {
+  const result: OpenCodeConversionResult = {
+    agents: [],
+    skills: [],
+    tools: [],
+    plugins: [],
+    warnings: [],
+    errors: [],
+  };
+
+  const convertedAgents = convertAgents(bmadAgents);
+  result.agents = convertedAgents.agents;
+  result.skills.push(...convertedAgents.skills);
+  result.skills.push(...convertWorkflows(bmadWorkflows));
+  result.skills.push(...convertTasks(bmadTasks));
+
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  for (const agent of result.agents) {
+    writeAgentsAgent(outputDir, agent);
+    if (verbose) console.log(`  Created agent: ${agent.filename}`);
+  }
+  for (const skill of result.skills) {
+    writeAgentsSkill(outputDir, skill);
+    if (verbose) console.log(`  Created skill: ${skill.folder}/SKILL.md`);
+  }
+
+  return result;
+}
+
+export interface ConversionResultSummary {
+  agentCount: number;
+  skillCount: number;
+  warnings: string[];
+  errors: string[];
+}
+
+export async function convert(options: ConversionOptions): Promise<ConversionResultSummary> {
+  const { sourceDir, outputDir, target = 'opencode', verbose = false } = options;
+
+  if (verbose) console.log(`BMAD to ${target} Converter`);
+  if (verbose) console.log('========================\n');
+
+  const configDir = path.join(sourceDir, '_config');
+
+  const agentManifestContent = readFileIfExists(path.join(configDir, 'agent-manifest.csv'));
+  const workflowManifestContent = readFileIfExists(path.join(configDir, 'workflow-manifest.csv'));
+  const taskManifestContent = readFileIfExists(path.join(configDir, 'task-manifest.csv'));
+
+  if (!agentManifestContent && !workflowManifestContent && !taskManifestContent) {
+    return { agentCount: 0, skillCount: 0, warnings: [], errors: [`No manifest files found in ${configDir}`] };
+  }
+
+  if (verbose) console.log('Loading BMAD assets...\n');
+
+  const agentManifest = agentManifestContent ? parseAgentManifest(agentManifestContent) : [];
+  const workflowManifest = workflowManifestContent ? parseWorkflowManifest(workflowManifestContent) : [];
+  const taskManifest = taskManifestContent ? parseTaskManifest(taskManifestContent) : [];
+
+  if (verbose) console.log(`Found ${agentManifest.length} agents, ${workflowManifest.length} workflows, ${taskManifest.length} tasks\n`);
+
+  if (verbose) console.log('Loading agents...');
+  const bmadAgents = loadAgents(sourceDir, agentManifest, verbose);
+
+  if (verbose) console.log('\nLoading workflows...');
+  const bmadWorkflows = loadWorkflows(sourceDir, workflowManifest, verbose);
+
+  if (verbose) console.log('\nLoading tasks...');
+  const bmadTasks = loadTasks(sourceDir, taskManifest, verbose);
+
+  if (verbose) console.log(`\nConverting to ${target} format...\n`);
+  if (verbose) console.log('Writing output files...\n');
+
+  let agentCount = 0;
+  let skillCount = 0;
+  let warnings: string[] = [];
+  let errors: string[] = [];
+
+  switch (target) {
+    case 'opencode': {
+      const r = convertAndWriteOpenCode(bmadAgents, bmadWorkflows, bmadTasks, outputDir, verbose);
+      agentCount = r.agents.length;
+      skillCount = r.skills.length;
+      warnings = r.warnings;
+      errors = r.errors;
+      break;
+    }
+    case 'claude': {
+      const r = convertAndWriteClaude(bmadAgents, bmadWorkflows, bmadTasks, outputDir, verbose);
+      agentCount = r.agents.length;
+      skillCount = r.skills.length;
+      warnings = r.warnings;
+      errors = r.errors;
+      break;
+    }
+    case 'agents': {
+      const r = convertAndWriteAgents(bmadAgents, bmadWorkflows, bmadTasks, outputDir, verbose);
+      agentCount = r.agents.length;
+      skillCount = r.skills.length;
+      warnings = r.warnings;
+      errors = r.errors;
+      break;
+    }
+  }
+
   if (verbose) {
     console.log('\nConversion complete!');
-    console.log(`  Agents: ${result.agents.length}`);
-    console.log(`  Skills: ${result.skills.length}`);
-    console.log(`  Tools: ${result.tools.length}`);
-    console.log(`  Warnings: ${result.warnings.length}`);
-    console.log(`  Errors: ${result.errors.length}`);
+    console.log(`  Agents: ${agentCount}`);
+    console.log(`  Skills: ${skillCount}`);
+    console.log(`  Warnings: ${warnings.length}`);
+    console.log(`  Errors: ${errors.length}`);
   }
-  
-  return result;
+
+  return { agentCount, skillCount, warnings, errors };
 }

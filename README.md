@@ -1,30 +1,40 @@
-# BMAD to OpenCode Converter
+# BMAD Multi-Target Converter
 
-Convert [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) modules to [OpenCode](https://opencode.ai) plugins.
+Convert [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) modules to multiple AI IDE formats:
+
+- **OpenCode** (`.opencode/`) — [OpenCode](https://opencode.ai) agents & skills
+- **Claude Code** (`.claude/`) — Claude Code agents & skills
+- **Agents** (`.agents/`) — Cross-IDE compatible format
 
 ## Installation
 
 ```bash
-npx bmad-opencode-converter --source <bmad-dir> --output <output-dir>
+npx bmad-opencode-converter --source <bmad-dir> --output <output-dir> --target <format>
 ```
 
 Or install globally:
 
 ```bash
 npm install -g bmad-opencode-converter
-bmad-convert --source <bmad-dir> --output <output-dir>
+bmad-convert --source <bmad-dir> --output <output-dir> --target claude
 ```
 
 ## Usage
 
-### Convert BMAD to OpenCode
+### Convert BMAD to Different Formats
 
 ```bash
-# Convert from _bmad directory to current project
-npx bmad-opencode-converter --source ./_bmad --output ./ --verbose
+# Default: Convert to OpenCode format
+npx bmad-opencode-converter --source ./_bmad --output ./
 
-# Convert to a specific output directory
-npx bmad-opencode-converter -s ./_bmad -o ./my-opencode-project -v
+# Convert to Claude Code format
+npx bmad-opencode-converter --source ./_bmad --output ./ --target claude
+
+# Convert to cross-IDE Agents format
+npx bmad-opencode-converter -s ./_bmad -o ./ -t agents
+
+# With verbose output
+npx bmad-opencode-converter -s ./_bmad -o ./ -t claude -v
 ```
 
 ### Options
@@ -32,39 +42,40 @@ npx bmad-opencode-converter -s ./_bmad -o ./my-opencode-project -v
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--source` | `-s` | Path to BMAD `_bmad` directory |
-| `--output` | `-o` | Output directory for OpenCode files |
+| `--output` | `-o` | Output directory for generated files |
+| `--target` | `-t` | Target format: `opencode` (default), `claude`, `agents` |
 | `--verbose` | `-v` | Show detailed conversion progress |
 | `--help` | `-h` | Show help message |
 
 ## Conversion Mapping
 
-| BMAD Component | OpenCode Output |
-|----------------|-----------------|
-| Agent (persona, menu, rules) | `.opencode/agents/*.md` + `.opencode/skills/*/SKILL.md` |
-| Workflow (yaml + instructions) | `.opencode/skills/*/SKILL.md` |
-| Task (standalone instructions) | `.opencode/skills/*/SKILL.md` |
+| BMAD Component | Output Per Target |
+|----------------|-------------------|
+| Agent | Agent definition + agent-derived skill (with owned workflow/task skills in `skills[]`) |
+| Workflow | Skill with step-by-step instructions |
+| Task | Skill with task instructions |
 
-## Output Structure
+### Output Structure by Target
 
-After conversion, your project will have:
-
+**OpenCode** (`--target opencode`):
 ```
-your-project/
-├── .opencode/
-│   ├── agents/           # OpenCode agent definitions
-│   │   ├── bmm-dev.md
-│   │   ├── bmm-pm.md
-│   │   ├── cis-storyteller.md
-│   │   └── ...
-│   └── skills/           # OpenCode skill definitions
-│       ├── bmad-bmm-dev-story/
-│       │   └── SKILL.md
-│       ├── bmad-bmm-create-prd/
-│       │   └── SKILL.md
-│       ├── bmad-cis-storytelling/
-│       │   └── SKILL.md
-│       └── ...
-└── ...
+.opencode/
+├── agents/{module}-{name}.md
+└── skills/{skill-name}/SKILL.md
+```
+
+**Claude Code** (`--target claude`):
+```
+.claude/
+├── agents/{module}-{name}.md
+└── skills/{skill-name}/SKILL.md
+```
+
+**Agents** (`--target agents`):
+```
+.agents/
+├── agents/{module}-{name}.md
+└── skills/{skill-name}/SKILL.md
 ```
 
 ---
@@ -180,11 +191,13 @@ To distribute as an npm package, add to your `opencode.json`:
 # 1. Install BMAD to your project
 npx bmad-method install
 
-# 2. Convert to OpenCode format
-npx bmad-opencode-converter --source ./_bmad --output ./ --verbose
+# 2. Convert to your preferred format
+npx bmad-opencode-converter --source ./_bmad --output ./ --target opencode --verbose
+npx bmad-opencode-converter --source ./_bmad --output ./ --target claude --verbose
 
-# 3. Start OpenCode
-opencode
+# 3. Start your IDE
+opencode        # for OpenCode target
+claude          # for Claude Code target
 
 # 4. Use converted agents
 # Type: @bmm-pm help me define the product requirements
@@ -257,7 +270,7 @@ git clone <repo-url>
 cd bmad-opencode-converter
 npm install
 
-# Run tests with sample data
+# Run tests (all three targets)
 npm test
 
 # Build for distribution
