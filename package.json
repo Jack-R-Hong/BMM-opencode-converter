@@ -1,12 +1,12 @@
 {
   "name": "bmad-opencode-converter",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Convert BMAD modules to OpenCode, Claude Code, or cross-IDE agent formats",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "bmad-convert": "dist/cli.js"
+    "bmad-opencode-converter": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

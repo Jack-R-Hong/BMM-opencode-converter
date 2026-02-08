@@ -1,36 +1,7 @@
 import * as path from 'path';
-import * as fs from 'fs/promises';
-import { fileURLToPath } from 'url';
 import { parseMarkdown } from '../parsers/markdown-parser.js';
-import type { BMADAgentManifestRow, BMADAgentFile } from '../types/bmad.js';
+import type { BMADAgentManifestRow } from '../types/bmad.js';
 import type { OpenCodeAgent, OpenCodeSkill } from '../types/opencode.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const isInDist = __dirname.includes('/dist/');
-const agentSkillsPath = isInDist
-  ? path.resolve(__dirname, '../../src/agent-skills.json')
-  : path.resolve(__dirname, '../agent-skills.json');
-
-export interface AgentSkillEntry {
-  displayName: string;
-  module: string;
-  workflows: string[];
-  tasks?: string[];
-}
-
-export type AgentSkillsMap = Record<string, AgentSkillEntry>;
-
-let agentSkillsCache: AgentSkillsMap | null = null;
-
-async function loadAgentSkills(): Promise<AgentSkillsMap> {
-  if (!agentSkillsCache) {
-    const raw = await fs.readFile(agentSkillsPath, 'utf-8');
-    agentSkillsCache = JSON.parse(raw) as AgentSkillsMap;
-  }
-  return agentSkillsCache;
-}
 
 /**
  * Build the specific skill name for a workflow or task, following the
@@ -40,6 +11,62 @@ async function loadAgentSkills(): Promise<AgentSkillsMap> {
  */
 function toSkillName(module: string, name: string): string {
   return module === 'core' ? `bmad-${name}` : `bmad-${module}-${name}`;
+}
+
+/**
+ * Extract the module and workflow/task name from a menu item exec/workflow path.
+ *
+ * Paths follow the pattern:
+ *   {project-root}/_bmad/{module}/workflows/{...}/{name}/workflow.{md|yaml}
+ *   {project-root}/_bmad/{module}/workflows/{...}/workflow-{name}.md
+ *   {project-root}/_bmad/{module}/tasks/{name}.{md|xml}
+ *
+ * Returns null if the path cannot be parsed.
+ */
+function parseExecPath(execPath: string): { module: string; name: string } | null {
+  // Strip {project-root}/_bmad/ prefix
+  const match = execPath.match(/\/_bmad\/([^/]+)\/(workflows|tasks)\/(.+)$/);
+  if (!match) return null;
+
+  const module = match[1];
+  const category = match[2]; // 'workflows' or 'tasks'
+  const rest = match[3]; // everything after workflows/ or tasks/
+
+  if (category === 'tasks') {
+    // tasks/{name}.md or tasks/{name}.xml
+    const taskName = rest.replace(/\.[^.]+$/, '');
+    return { module, name: taskName };
+  }
+
+  // For workflows, extract meaningful name from path
+  const filename = path.basename(rest);
+
+  // Pattern: workflow-{name}.md  (e.g. workflow-market-research.md)
+  const dashMatch = filename.match(/^workflow-(.+)\.[^.]+$/);
+  if (dashMatch) {
+    return { module, name: dashMatch[1] };
+  }
+
+  // Pattern: workflow.{md|yaml} in a named directory
+  // e.g. brainstorming/workflow.md → name = brainstorming
+  //      1-analysis/create-product-brief/workflow.md → name = create-product-brief
+  //      document-project/workflow.yaml → name = document-project
+  if (/^workflow\.[^.]+$/.test(filename)) {
+    const dir = path.basename(path.dirname(rest));
+    return { module, name: dir };
+  }
+
+  return null;
+}
+
+function extractMenuExecPaths(content: string): string[] {
+  const paths: string[] = [];
+  const regex = /(?:exec|workflow)="([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(content)) !== null) {
+    paths.push(m[1]);
+  }
+  return paths;
 }
 
 export interface AgentConversionResult {
@@ -55,12 +82,11 @@ export async function convertAgent(
   const agentPath = path.join(bmadDir, relativePath);
   const parsed = await parseMarkdown(agentPath);
 
-  const agentSkills = await loadAgentSkills();
   const agentName = createAgentName(manifest);
   const skillName = createSkillName(manifest);
 
-  // Build permission.skill from agent-skills.json
-  const skillPermission = buildSkillPermission(manifest, skillName, agentSkills);
+  const referencedSkillNames = extractReferencedSkillNames(parsed.content);
+  const skillPermission = buildSkillPermission(skillName, referencedSkillNames);
 
   const agent: OpenCodeAgent = {
     name: agentName,
@@ -71,7 +97,7 @@ export async function convertAgent(
         skill: skillPermission
       }
     },
-    systemPrompt: createAgentSystemPrompt(manifest, skillName, agentSkills)
+    systemPrompt: createAgentSystemPrompt(manifest, skillName, referencedSkillNames)
   };
 
   const skill: OpenCodeSkill = {
@@ -86,44 +112,34 @@ export async function convertAgent(
   return { agent, skill };
 }
 
-/**
- * Build specific skill permissions for an agent.
- *
- * 1. Always allow the agent's own persona skill
- * 2. Allow each workflow listed in agent-skills.json (by exact skill name)
- * 3. Allow each task listed in agent-skills.json (by exact skill name)
- *
- * Falls back to wildcard if the agent is not found in agent-skills.json.
- */
-function buildSkillPermission(
-  manifest: BMADAgentManifestRow,
-  ownSkillName: string,
-  agentSkills: AgentSkillsMap
-): Record<string, 'allow' | 'deny' | 'ask'> {
-  const entry = agentSkills[manifest.name];
+function extractReferencedSkillNames(content: string): string[] {
+  const execPaths = extractMenuExecPaths(content);
+  const seen = new Set<string>();
+  const skillNames: string[] = [];
 
-  if (!entry) {
-    // Agent not in agent-skills.json — fallback to module wildcard
-    return { [`bmad-${manifest.module}-*`]: 'allow' as const };
+  for (const execPath of execPaths) {
+    const parsed = parseExecPath(execPath);
+    if (!parsed) continue;
+    const name = toSkillName(parsed.module, parsed.name);
+    if (!seen.has(name)) {
+      seen.add(name);
+      skillNames.push(name);
+    }
   }
 
+  return skillNames;
+}
+
+function buildSkillPermission(
+  ownSkillName: string,
+  referencedSkillNames: string[]
+): Record<string, 'allow' | 'deny' | 'ask'> {
   const permission: Record<string, 'allow' | 'deny' | 'ask'> = {};
 
-  // 1. Agent's own persona skill
   permission[ownSkillName] = 'allow';
 
-  // 2. Workflow skills
-  for (const workflow of entry.workflows) {
-    const name = toSkillName(entry.module, workflow);
+  for (const name of referencedSkillNames) {
     permission[name] = 'allow';
-  }
-
-  // 3. Task skills
-  if (entry.tasks) {
-    for (const task of entry.tasks) {
-      const name = toSkillName(entry.module, task);
-      permission[name] = 'allow';
-    }
   }
 
   return permission;
@@ -146,10 +162,9 @@ function createSkillName(manifest: BMADAgentManifestRow): string {
 function createAgentSystemPrompt(
   manifest: BMADAgentManifestRow,
   skillName: string,
-  agentSkills: AgentSkillsMap
+  referencedSkillNames: string[]
 ): string {
   const role = manifest.role || manifest.displayName;
-  const entry = agentSkills[manifest.name];
 
   const lines: string[] = [
     `You are ${role}.`,
@@ -158,17 +173,11 @@ function createAgentSystemPrompt(
   ];
 
   // List allowed workflows/tasks so the agent knows what it can run
-  if (entry) {
-    const allowed = [
-      ...entry.workflows,
-      ...(entry.tasks || [])
-    ];
-    if (allowed.length > 0) {
-      lines.push('');
-      lines.push('You have access to the following workflows and tasks:');
-      for (const item of allowed) {
-        lines.push(`- ${item}`);
-      }
+  if (referencedSkillNames.length > 0) {
+    lines.push('');
+    lines.push('You have access to the following workflows and tasks:');
+    for (const name of referencedSkillNames) {
+      lines.push(`- ${name}`);
     }
   }
 
