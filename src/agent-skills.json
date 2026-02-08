@@ -1,0 +1,153 @@
+{
+  "bmad-master": {
+    "displayName": "BMad Master",
+    "module": "core",
+    "workflows": ["brainstorming", "party-mode"],
+    "tasks": [
+      "help",
+      "index-docs",
+      "shard-doc",
+      "editorial-review-prose",
+      "editorial-review-structure",
+      "review-adversarial-general"
+    ]
+  },
+  "analyst": {
+    "displayName": "Mary (Business Analyst)",
+    "module": "bmm",
+    "workflows": [
+      "brainstorming",
+      "market-research",
+      "domain-research",
+      "technical-research",
+      "create-product-brief",
+      "document-project",
+      "generate-project-context"
+    ]
+  },
+  "pm": {
+    "displayName": "John (Product Manager)",
+    "module": "bmm",
+    "workflows": [
+      "create-prd",
+      "validate-prd",
+      "edit-prd",
+      "create-epics-and-stories"
+    ]
+  },
+  "ux-designer": {
+    "displayName": "Sally (UX Designer)",
+    "module": "bmm",
+    "workflows": [
+      "create-ux-design"
+    ]
+  },
+  "architect": {
+    "displayName": "Winston (Architect)",
+    "module": "bmm",
+    "workflows": [
+      "create-architecture",
+      "check-implementation-readiness"
+    ]
+  },
+  "sm": {
+    "displayName": "Bob (Scrum Master)",
+    "module": "bmm",
+    "workflows": [
+      "sprint-planning",
+      "sprint-status",
+      "create-story",
+      "retrospective",
+      "correct-course"
+    ]
+  },
+  "dev": {
+    "displayName": "Amelia (Developer)",
+    "module": "bmm",
+    "workflows": [
+      "dev-story",
+      "code-review"
+    ]
+  },
+  "qa": {
+    "displayName": "Quinn (QA Engineer)",
+    "module": "bmm",
+    "workflows": [
+      "qa-automate"
+    ]
+  },
+  "quick-flow-solo-dev": {
+    "displayName": "Barry (Quick Flow Solo Dev)",
+    "module": "bmm",
+    "workflows": [
+      "quick-spec",
+      "quick-dev"
+    ]
+  },
+  "tech-writer": {
+    "displayName": "Paige (Technical Writer)",
+    "module": "bmm",
+    "workflows": [
+      "write-document",
+      "update-standards",
+      "mermaid-generate",
+      "validate-document",
+      "explain-concept"
+    ]
+  },
+  "brainstorming-coach": {
+    "displayName": "Carson (Elite Brainstorming Specialist)",
+    "module": "cis",
+    "workflows": [
+      "brainstorming"
+    ]
+  },
+  "creative-problem-solver": {
+    "displayName": "Dr. Quinn (Master Problem Solver)",
+    "module": "cis",
+    "workflows": [
+      "problem-solving"
+    ]
+  },
+  "design-thinking-coach": {
+    "displayName": "Maya (Design Thinking Maestro)",
+    "module": "cis",
+    "workflows": [
+      "design-thinking"
+    ]
+  },
+  "innovation-strategist": {
+    "displayName": "Victor (Disruptive Innovation Oracle)",
+    "module": "cis",
+    "workflows": [
+      "innovation-strategy"
+    ]
+  },
+  "storyteller": {
+    "displayName": "Sophia (Master Storyteller)",
+    "module": "cis",
+    "workflows": [
+      "storytelling"
+    ]
+  },
+  "presentation-master": {
+    "displayName": "Caravaggio (Presentation Expert)",
+    "module": "cis",
+    "workflows": []
+  },
+  "tea": {
+    "displayName": "Murat (Master Test Architect)",
+    "module": "tea",
+    "workflows": [
+      "teach-me-testing",
+      "testarch-framework",
+      "testarch-ci",
+      "testarch-test-design",
+      "testarch-atdd",
+      "testarch-automate",
+      "testarch-test-review",
+      "testarch-nfr",
+      "testarch-trace"
+    ]
+  }
+}
