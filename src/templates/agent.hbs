@@ -1,0 +1,24 @@
+---
+description: {{description}}
+mode: {{mode}}
+{{#if permission}}
+permission:
+{{#if permission.skill}}
+  skill:
+{{#each permission.skill}}
+    "{{@key}}": {{this}}
+{{/each}}
+{{/if}}
+{{#if permission.edit}}
+  edit: {{permission.edit}}
+{{/if}}
+{{#if permission.bash}}
+  bash:
+{{#each permission.bash}}
+    "{{@key}}": {{this}}
+{{/each}}
+{{/if}}
+{{/if}}
+---
+
+{{systemPrompt}}

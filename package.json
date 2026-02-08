@@ -1,6 +1,6 @@
 {
   "name": "bmad-opencode-converter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Convert BMAD modules to OpenCode, Claude Code, or cross-IDE agent formats",
   "type": "module",
   "main": "dist/index.js",
@@ -18,11 +18,12 @@
     "clean": "rm -rf dist tests/output tests/output-claude tests/output-agents"
   },
   "dependencies": {
-    "yaml": "^2.3.4",
-    "csv-parse": "^5.5.3"
+    "csv-parse": "^5.5.3",
+    "handlebars": "^4.7.8",
+    "yaml": "^2.3.4"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.19.33",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   },

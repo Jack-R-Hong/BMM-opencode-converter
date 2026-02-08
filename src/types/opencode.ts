@@ -1,49 +1,22 @@
-export type OpenCodeAgentMode = 'primary' | 'subagent' | 'all';
-export type OpenCodePermission = 'allow' | 'deny' | 'ask';
-
-export interface OpenCodeAgentTools {
-  write?: boolean;
-  edit?: boolean;
-  bash?: boolean;
-  read?: boolean;
-  glob?: boolean;
-  grep?: boolean;
-  skill?: boolean;
-  task?: boolean;
-  [key: string]: boolean | undefined;
-}
-
-export interface OpenCodeAgentPermissions {
-  edit?: OpenCodePermission;
-  bash?: OpenCodePermission | Record<string, OpenCodePermission>;
-  webfetch?: OpenCodePermission;
-  skill?: Record<string, OpenCodePermission>;
-  task?: Record<string, OpenCodePermission>;
-}
+// OpenCode Type Definitions
 
 export interface OpenCodeAgentFrontmatter {
   description: string;
-  mode?: OpenCodeAgentMode;
+  mode?: 'subagent' | 'primary' | 'all';
   model?: string;
   temperature?: number;
   steps?: number;
-  tools?: OpenCodeAgentTools;
-  permission?: OpenCodeAgentPermissions;
-  hidden?: boolean;
-  color?: string;
-  top_p?: number;
+  permission?: {
+    edit?: 'allow' | 'deny' | 'ask';
+    bash?: Record<string, 'allow' | 'deny' | 'ask'>;
+    skill?: Record<string, 'allow' | 'deny' | 'ask'>;
+  };
 }
 
 export interface OpenCodeAgent {
-  filename: string;
+  name: string;
   frontmatter: OpenCodeAgentFrontmatter;
-  prompt: string;
-  sourceModule?: string;
-  sourceBmadAgent?: string;
-}
-
-export interface OpenCodeSkillMetadata {
-  [key: string]: string;
+  systemPrompt: string;
 }
 
 export interface OpenCodeSkillFrontmatter {
@@ -51,53 +24,21 @@ export interface OpenCodeSkillFrontmatter {
   description: string;
   license?: string;
   compatibility?: string;
-  metadata?: OpenCodeSkillMetadata;
+  metadata?: Record<string, string>;
 }
 
 export interface OpenCodeSkill {
   name: string;
-  folder: string;
   frontmatter: OpenCodeSkillFrontmatter;
   content: string;
-  sourceModule?: string;
-  sourceType?: 'agent' | 'workflow' | 'task';
-  sourceName?: string;
 }
 
-export interface OpenCodeToolArg {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-  description: string;
-  required?: boolean;
-}
+export type ConversionTarget = 'opencode' | 'claude' | 'agents';
 
-export interface OpenCodeTool {
-  filename: string;
-  name: string;
-  description: string;
-  args: OpenCodeToolArg[];
-  executeBody: string;
-  sourceModule?: string;
-  sourceTask?: string;
-}
-
-export interface OpenCodePluginHook {
-  event: string;
-  handler: string;
-}
-
-export interface OpenCodePlugin {
-  filename: string;
-  name: string;
-  hooks: OpenCodePluginHook[];
-  sourceModule?: string;
-}
-
-export interface OpenCodeConversionResult {
+export interface ConversionResult {
   agents: OpenCodeAgent[];
   skills: OpenCodeSkill[];
-  tools: OpenCodeTool[];
-  plugins: OpenCodePlugin[];
-  warnings: string[];
+  agentCount: number;
+  skillCount: number;
   errors: string[];
 }
